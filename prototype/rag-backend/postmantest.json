@@ -6,7 +6,7 @@
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
-		{ "key": "baseUrl", "value": "http://localhost:8787" },
+		{ "key": "baseUrl", "value": "https://rag-api.taspolsd.dev" },
 		{ "key": "patientEmail", "value": "patient1@example.com" },
 		{ "key": "patientPassword", "value": "patient123" },
 		{ "key": "patientFirstName", "value": "Patient" },
