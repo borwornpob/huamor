@@ -1,0 +1,238 @@
+{
+	"info": {
+		"name": "RAG Backend API Tests",
+		"_postman_id": "7f6d8c33-2a9b-4f1e-bf95-1f65d4c91f10",
+		"description": "End-to-end tests for auth, chat, and expert review routes.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "baseUrl", "value": "http://localhost:8787" },
+		{ "key": "patientEmail", "value": "patient1@example.com" },
+		{ "key": "patientPassword", "value": "patient123" },
+		{ "key": "patientFirstName", "value": "Patient" },
+		{ "key": "patientLastName", "value": "Demo" },
+		{ "key": "patientBirthDate", "value": "1990-01-01" },
+		{ "key": "patientGender", "value": "other" },
+		{ "key": "doctorEmail", "value": "doctor1@example.com" },
+		{ "key": "doctorPassword", "value": "doctor123" },
+		{ "key": "doctorFirstName", "value": "Doctor" },
+		{ "key": "doctorLastName", "value": "Demo" },
+		{ "key": "doctorBirthDate", "value": "1980-01-01" },
+		{ "key": "doctorGender", "value": "other" },
+		{ "key": "patientToken", "value": "" },
+		{ "key": "doctorToken", "value": "" },
+		{ "key": "sessionId", "value": "" }
+	],
+	"item": [
+		{
+			"name": "Auth - Patient Signup",
+			"request": {
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{patientEmail}}\",\n  \"firstName\": \"{{patientFirstName}}\",\n  \"lastName\": \"{{patientLastName}}\",\n  \"birthDate\": \"{{patientBirthDate}}\",\n  \"gender\": \"{{patientGender}}\",\n  \"password\": \"{{patientPassword}}\"\n}"
+				},
+				"url": "{{baseUrl}}/api/auth/signup"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Patient signup 201', function () {",
+							"  pm.response.to.have.status(201);",
+							"});",
+							"var json = pm.response.json();",
+							"pm.collectionVariables.set('patientToken', json.token);",
+							"pm.test('Patient signup token exists', function () {",
+							"  pm.expect(json.token).to.be.a('string').and.not.empty;",
+							"});"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "{{baseUrl}}/health"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Health is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"pm.test('ok=true', function () {",
+							"  var json = pm.response.json();",
+							"  pm.expect(json.ok).to.eql(true);",
+							"});"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth - Patient Login",
+			"request": {
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{patientEmail}}\",\n  \"password\": \"{{patientPassword}}\"\n}"
+				},
+				"url": "{{baseUrl}}/api/auth/login"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Patient login 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"var json = pm.response.json();",
+							"pm.collectionVariables.set('patientToken', json.token);",
+							"pm.test('Patient token exists', function () {",
+							"  pm.expect(json.token).to.be.a('string').and.not.empty;",
+							"});"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth - Doctor Login",
+			"request": {
+				"method": "POST",
+				"header": [{ "key": "Content-Type", "value": "application/json" }],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"{{doctorEmail}}\",\n  \"password\": \"{{doctorPassword}}\"\n}"
+				},
+				"url": "{{baseUrl}}/api/auth/login"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Doctor login 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"var json = pm.response.json();",
+							"pm.collectionVariables.set('doctorToken', json.token);",
+							"pm.test('Doctor token exists', function () {",
+							"  pm.expect(json.token).to.be.a('string').and.not.empty;",
+							"});"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Chat - Start Session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{patientToken}}" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"message\": \"I have headache and fever for 2 days\",\n  \"provider\": \"sealion\"\n}"
+				},
+				"url": "{{baseUrl}}/api/chat/start"
+			},
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test('Chat start 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"var json = pm.response.json();",
+							"pm.collectionVariables.set('sessionId', json.session.id);",
+							"pm.test('Session ID created', function () {",
+							"  pm.expect(json.session.id).to.be.a('string').and.not.empty;",
+							"});"
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Chat - Get My Sessions",
+			"request": {
+				"method": "GET",
+				"header": [{ "key": "Authorization", "value": "Bearer {{patientToken}}" }],
+				"url": "{{baseUrl}}/api/chat/sessions?limit=20"
+			}
+		},
+		{
+			"name": "Chat - Get Session History",
+			"request": {
+				"method": "GET",
+				"header": [{ "key": "Authorization", "value": "Bearer {{patientToken}}" }],
+				"url": "{{baseUrl}}/api/chat/sessions/{{sessionId}}/history"
+			}
+		},
+		{
+			"name": "Chat - Send Message",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{patientToken}}" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"message\": \"Now I also feel nauseous\",\n  \"provider\": \"sealion\"\n}"
+				},
+				"url": "{{baseUrl}}/api/chat/{{sessionId}}/message"
+			}
+		},
+		{
+			"name": "Expert - Get All Sessions",
+			"request": {
+				"method": "GET",
+				"header": [{ "key": "Authorization", "value": "Bearer {{doctorToken}}" }],
+				"url": "{{baseUrl}}/api/expert/sessions?limit=100"
+			}
+		},
+		{
+			"name": "Expert - Get Session History",
+			"request": {
+				"method": "GET",
+				"header": [{ "key": "Authorization", "value": "Bearer {{doctorToken}}" }],
+				"url": "{{baseUrl}}/api/expert/sessions/{{sessionId}}/history"
+			}
+		},
+		{
+			"name": "Expert - Review Session",
+			"request": {
+				"method": "POST",
+				"header": [
+					{ "key": "Content-Type", "value": "application/json" },
+					{ "key": "Authorization", "value": "Bearer {{doctorToken}}" }
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"question\": \"What should the patient do next?\",\n  \"answer\": \"Hydrate, rest, and seek in-person care if symptoms worsen.\",\n  \"note\": \"Reviewed by expert\"\n}"
+				},
+				"url": "{{baseUrl}}/api/expert/sessions/{{sessionId}}/review"
+			}
+		}
+	]
+}

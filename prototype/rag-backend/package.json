@@ -1,0 +1,32 @@
+{
+  "name": "rag-backend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:api": "bash scripts/api_smoke_pipeline.sh"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "@hono/node-server": "^1.13.7",
+    "@langchain/langgraph": "^0.2.53",
+    "@qdrant/js-client-rest": "^1.17.0",
+    "dotenv": "^16.4.5",
+    "hono": "^4.6.12",
+    "jose": "^5.9.6",
+    "llamaindex": "0.4.14",
+    "openai": "^6.33.0",
+    "uuid": "^11.0.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
