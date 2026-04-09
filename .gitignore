@@ -1,2 +1,6 @@
 .idea/*
 .venv
+
+/prototype/rag-backend/package-lock.json
+pnpm
+AGENTS.md
