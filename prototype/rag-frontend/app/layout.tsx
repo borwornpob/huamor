@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RAG Frontend",
-  description: "Frontend tester for rag-backend APIs",
+  title: "Hua-Mor",
+  description: "Hua-Mor frontend",
 };
 
 export default function RootLayout({

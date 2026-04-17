@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ChatMessage, ChatSession, User } from "../types";
 
 type PatientViewProps = {
@@ -70,7 +71,7 @@ export default function PatientView(props: PatientViewProps) {
   }
 
   function renderChatMessages() {
-    const items: JSX.Element[] = [];
+    const items: ReactNode[] = [];
 
     for (let index = 0; index < activeMessages.length; index += 1) {
       const item = activeMessages[index];
@@ -120,7 +121,7 @@ export default function PatientView(props: PatientViewProps) {
     <main className="min-h-screen bg-[#f6f9ff] text-[#2a333b]">
       <header className="sticky top-0 z-20 flex items-center justify-between bg-white/80 px-6 py-4 backdrop-blur-xl">
         <div>
-          <h1 className="text-xl font-bold text-[#0060ad]">Health Chat</h1>
+          <h1 className="text-xl font-bold text-[#0060ad]">Hua-Mor</h1>
           <p className="text-xs text-[#576069]">Patient: {user.displayName}</p>
         </div>
         <div className="flex items-center gap-3">

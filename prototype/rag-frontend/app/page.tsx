@@ -292,7 +292,7 @@ export default function Home() {
         <div className="mx-auto grid min-h-screen max-w-7xl lg:grid-cols-2">
           <section className="hidden p-12 lg:flex lg:flex-col lg:justify-between">
             <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-[#0060ad]">Health Chatbot</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight text-[#0060ad]">Hua-Mor</h1>
               <p className="mt-6 max-w-md text-4xl font-bold leading-tight">
                 Your compassionate medical companion, simplified.
               </p>

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ChatMessage, ChatSession, User } from "../types";
 
 type DoctorViewProps = {
@@ -81,7 +82,7 @@ export default function DoctorView(props: DoctorViewProps) {
   }
 
   function renderDoctorHistoryBlocks() {
-    const blocks: JSX.Element[] = [];
+    const blocks: ReactNode[] = [];
     for (let index = 0; index < activeDoctorMessages.length; index += 1) {
       const item = activeDoctorMessages[index];
       const next = activeDoctorMessages[index + 1];
@@ -224,7 +225,7 @@ export default function DoctorView(props: DoctorViewProps) {
             </button>
             <p className="text-xs text-[#576069]">
               {doctorViewMode === "pending"
-                ? "Question ล็อกไว้จากบทสนทนา และส่งรีวิวผ่าน endpoint เดียวของ backend"
+                ? "Question ล็อกไว้จากบทสนทนา"
                 : "แท็บนี้เป็นประวัติ จึงปิดการ submit"}
             </p>
           </div>
