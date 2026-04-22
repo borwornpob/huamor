@@ -1,18 +1,21 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { config } from "../config.js";
 import { runChatGraph } from "../graph/chatGraph.js";
 import type { SupportedLlmProvider } from "../lib/llm.js";
+import { incrementMetric } from "../lib/metrics.js";
+import { getActiveIndexRecord, recordInferenceEvent } from "../lib/ops.js";
 import { chatStore } from "../lib/store.js";
 import { authRequired, getAuth } from "../middleware/auth.js";
 
 const startSchema = z.object({
   message: z.string().min(1),
-  provider: z.enum(["sealion"]).optional(),
+  provider: z.enum(["sealion", "gemini", "openrouter"]).optional(),
 });
 
 const continueSchema = z.object({
   message: z.string().min(1),
-  provider: z.enum(["sealion"]).optional(),
+  provider: z.enum(["sealion", "gemini", "openrouter"]).optional(),
 });
 
 const listSchema = z.object({
@@ -22,6 +25,21 @@ const listSchema = z.object({
 export const chatRouter = new Hono();
 
 chatRouter.use("*", authRequired);
+
+function deriveRetrievalSource(sourceSet: Set<string>): "qdrant" | "local" | "mixed" | "none" {
+  if (sourceSet.size === 0) {
+    return "none";
+  }
+  if (sourceSet.size > 1) {
+    return "mixed";
+  }
+  return sourceSet.has("qdrant") ? "qdrant" : "local";
+}
+
+async function resolveRuntimeIndexVersion(): Promise<string> {
+  const active = await getActiveIndexRecord();
+  return active?.indexVersion ?? config.activeIndexVersion;
+}
 
 chatRouter.post("/start", async (c) => {
   const auth = getAuth(c);
@@ -36,17 +54,43 @@ chatRouter.post("/start", async (c) => {
   }
 
   const session = await chatStore.create(auth.userId, parsed.data.message);
+  const startedAt = Date.now();
   const graphResult = await runChatGraph(parsed.data.message, parsed.data.provider as SupportedLlmProvider | undefined);
+  const latencyMs = Date.now() - startedAt;
 
   await chatStore.appendMessage(session.id, {
     role: "assistant",
     content: graphResult.draftReply,
   });
 
+  const indexVersion = await resolveRuntimeIndexVersion();
+  const runtimeMetadata = {
+    provider: parsed.data.provider ?? config.llmProvider,
+    modelVersion: config.sealionModel,
+    promptVersion: config.promptVersion,
+    indexVersion,
+    retrievalSource: deriveRetrievalSource(new Set(graphResult.retrieved.map((item) => item.source))),
+    retrievalCount: graphResult.retrieved.length,
+    fallbackReason: graphResult.fallbackReason,
+    latencyMs,
+    generatedAt: new Date().toISOString(),
+  };
   session.latestDraft = graphResult.draftReply;
-  session.retrievalContext = graphResult.retrieved;
+  session.retrievalContext = graphResult.retrieved.map((item) => item.text);
+  session.lastRuntimeMetadata = runtimeMetadata;
   session.status = "active";
   const updated = await chatStore.update(session);
+  await recordInferenceEvent({
+    sessionId: session.id,
+    patientId: session.patientId,
+    userMessage: parsed.data.message,
+    runtime: runtimeMetadata,
+  });
+  incrementMetric("api_chat_requests_total");
+  incrementMetric("api_chat_retrieval_contexts_total", graphResult.retrieved.length);
+  if (graphResult.fallbackReason) {
+    incrementMetric("api_chat_fallback_total");
+  }
 
   return c.json({
     session: updated,
@@ -76,17 +120,43 @@ chatRouter.post("/:sessionId/message", async (c) => {
   }
 
   await chatStore.appendMessage(session.id, { role: "user", content: parsed.data.message });
+  const startedAt = Date.now();
   const graphResult = await runChatGraph(parsed.data.message, parsed.data.provider as SupportedLlmProvider | undefined);
+  const latencyMs = Date.now() - startedAt;
 
   await chatStore.appendMessage(session.id, {
     role: "assistant",
     content: graphResult.draftReply,
   });
 
+  const indexVersion = await resolveRuntimeIndexVersion();
+  const runtimeMetadata = {
+    provider: parsed.data.provider ?? config.llmProvider,
+    modelVersion: config.sealionModel,
+    promptVersion: config.promptVersion,
+    indexVersion,
+    retrievalSource: deriveRetrievalSource(new Set(graphResult.retrieved.map((item) => item.source))),
+    retrievalCount: graphResult.retrieved.length,
+    fallbackReason: graphResult.fallbackReason,
+    latencyMs,
+    generatedAt: new Date().toISOString(),
+  };
   session.latestDraft = graphResult.draftReply;
-  session.retrievalContext = graphResult.retrieved;
+  session.retrievalContext = graphResult.retrieved.map((item) => item.text);
+  session.lastRuntimeMetadata = runtimeMetadata;
   session.status = "active";
   const updated = await chatStore.update(session);
+  await recordInferenceEvent({
+    sessionId: session.id,
+    patientId: session.patientId,
+    userMessage: parsed.data.message,
+    runtime: runtimeMetadata,
+  });
+  incrementMetric("api_chat_requests_total");
+  incrementMetric("api_chat_retrieval_contexts_total", graphResult.retrieved.length);
+  if (graphResult.fallbackReason) {
+    incrementMetric("api_chat_fallback_total");
+  }
 
   return c.json({
     session: updated,

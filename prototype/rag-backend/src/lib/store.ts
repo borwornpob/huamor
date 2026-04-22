@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { config } from "../config.js";
 import { hashPassword, verifyPassword } from "./auth.js";
 import { getSqlClient, hasDatabase } from "./db.js";
 import type { ChatMessage, ChatSession, User } from "../shared/types.js";
@@ -8,34 +9,36 @@ type StoredUser = User & {
   createdAt: string;
 };
 
-const seedUsers: StoredUser[] = [
-  {
-    id: "u_patient_01",
-    email: "patient1@example.com",
-    username: "patient1",
-    role: "patient",
-    displayName: "Patient Demo",
-    firstName: "Patient",
-    lastName: "Demo",
-    birthDate: "1990-01-01",
-    gender: "other",
-    passwordHash: hashPassword("patient123"),
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "u_doctor_01",
-    email: "doctor1@example.com",
-    username: "doctor1",
-    role: "doctor",
-    displayName: "Doctor Demo",
-    firstName: "Doctor",
-    lastName: "Demo",
-    birthDate: "1980-01-01",
-    gender: "other",
-    passwordHash: hashPassword("doctor123"),
-    createdAt: new Date().toISOString(),
-  },
-];
+const seedUsers: StoredUser[] = config.allowDemoUsers
+  ? [
+      {
+        id: "u_patient_01",
+        email: "patient1@example.com",
+        username: "patient1",
+        role: "patient",
+        displayName: "Patient Demo",
+        firstName: "Patient",
+        lastName: "Demo",
+        birthDate: "1990-01-01",
+        gender: "other",
+        passwordHash: hashPassword("patient123"),
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: "u_doctor_01",
+        email: "doctor1@example.com",
+        username: "doctor1",
+        role: "doctor",
+        displayName: "Doctor Demo",
+        firstName: "Doctor",
+        lastName: "Demo",
+        birthDate: "1980-01-01",
+        gender: "other",
+        passwordHash: hashPassword("doctor123"),
+        createdAt: new Date().toISOString(),
+      },
+    ]
+  : [];
 
 const sessions = new Map<string, ChatSession>();
 const memoryUsers = new Map<string, StoredUser>(seedUsers.map((user) => [user.username, user]));
@@ -68,6 +71,10 @@ function mapSession(
     retrievalContext: Array.isArray(row.retrieval_context)
       ? (row.retrieval_context as string[])
       : undefined,
+    lastRuntimeMetadata:
+      row.runtime_metadata && typeof row.runtime_metadata === "object"
+        ? (row.runtime_metadata as ChatSession["lastRuntimeMetadata"])
+        : undefined,
     doctorEdit:
       row.doctor_edit && typeof row.doctor_edit === "object"
         ? (row.doctor_edit as ChatSession["doctorEdit"])
@@ -447,6 +454,7 @@ export const chatStore = {
           updated_at = ${now},
           latest_draft = ${session.latestDraft ?? null},
           retrieval_context = ${session.retrievalContext ? JSON.stringify(session.retrievalContext) : null}::jsonb,
+          runtime_metadata = ${session.lastRuntimeMetadata ? JSON.stringify(session.lastRuntimeMetadata) : null}::jsonb,
           doctor_edit = ${session.doctorEdit ? JSON.stringify(session.doctorEdit) : null}::jsonb
         WHERE id = ${session.id}
       `;

@@ -9,7 +9,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:api": "bash scripts/api_smoke_pipeline.sh"
+    "test:api": "bash scripts/api_smoke_pipeline.sh",
+    "test:e2e": "playwright test",
+    "airflow:validate": "python3 -m py_compile dags/*.py pipelines/*.py scripts/*.py",
+    "deploy:compose": "docker compose up -d --build"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -25,6 +28,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/node": "^22.9.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"

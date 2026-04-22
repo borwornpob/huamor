@@ -4,6 +4,8 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { config } from "../config.js";
+import { getActiveIndexRecord } from "./ops.js";
+import type { RetrievalResult } from "../shared/types.js";
 
 let qdrantClient: QdrantClient | null = null;
 let qdrantReady = false;
@@ -11,6 +13,11 @@ let localCorpus: string[] | null = null;
 
 function hasQdrantConfig(): boolean {
   return Boolean(config.qdrantUrl && config.qdrantCollection);
+}
+
+async function resolveActiveCollectionName(): Promise<string> {
+  const active = await getActiveIndexRecord();
+  return active?.collectionName || config.qdrantCollection;
 }
 
 function getQdrantClient(): QdrantClient | null {
@@ -248,7 +255,7 @@ function lexicalScore(query: string, text: string): number {
   return overlap / qTokens.length;
 }
 
-function retrieveFromLocalCorpus(query: string, topK: number): string[] {
+function retrieveFromLocalCorpus(query: string, topK: number): RetrievalResult[] {
   if (!localCorpus || localCorpus.length === 0) {
     return [];
   }
@@ -257,8 +264,12 @@ function retrieveFromLocalCorpus(query: string, topK: number): string[] {
     .map((text) => ({ text, score: lexicalScore(query, text) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
-    .map((row) => row.text)
-    .filter(Boolean);
+    .filter((row) => Boolean(row.text))
+    .map((row) => ({
+      text: row.text,
+      score: row.score,
+      source: "local" as const,
+    }));
 }
 
 export async function ensureRetrievalReady(): Promise<void> {
@@ -269,39 +280,46 @@ export async function ensureRetrievalReady(): Promise<void> {
   const client = getQdrantClient();
   if (client) {
     try {
-      await client.getCollection(config.qdrantCollection);
+      await client.getCollection(await resolveActiveCollectionName());
       qdrantReady = true;
       return;
     } catch (error) {
-      console.warn("Qdrant is not ready, using local fallback retrieval", error);
+      console.warn(`Qdrant is not ready, using local fallback retrieval: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   localCorpus = await readDocumentsFromDisk();
 }
 
-export async function retrieveContext(query: string, topK = 3): Promise<string[]> {
+export async function retrieveContext(query: string, topK = 3): Promise<RetrievalResult[]> {
   const client = getQdrantClient();
   if (client) {
     try {
+      const collectionName = await resolveActiveCollectionName();
       const vector = await embedQuery(query);
       const vectorInput = config.qdrantVectorName
         ? { name: config.qdrantVectorName, vector }
         : vector;
 
-      const points = await client.search(config.qdrantCollection, {
+      const points = await client.search(collectionName, {
         vector: vectorInput,
         limit: topK,
         with_payload: true,
         score_threshold: config.qdrantScoreThreshold > 0 ? config.qdrantScoreThreshold : undefined,
       });
 
-      const contexts = points.map((p) => payloadToContext(p.payload)).filter(Boolean);
+      const contexts = points
+        .map((p) => ({
+          text: payloadToContext(p.payload),
+          score: typeof p.score === "number" ? p.score : undefined,
+          source: "qdrant" as const,
+        }))
+        .filter((row) => Boolean(row.text));
       if (contexts.length > 0) {
         return contexts;
       }
     } catch (error) {
-      console.warn("Qdrant retrieval failed, using local fallback retrieval", error);
+      console.warn(`Qdrant retrieval failed, using local fallback retrieval: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -326,6 +344,7 @@ export async function upsertReviewedContentToQdrant(input: {
   }
 
   try {
+    const collectionName = await resolveActiveCollectionName();
     const vector = await embedQuery(input.content);
     const pointId = randomUUID();
     const vectorPayload = config.qdrantVectorName
@@ -343,7 +362,7 @@ export async function upsertReviewedContentToQdrant(input: {
       updated_at: new Date().toISOString(),
     };
 
-    await client.upsert(config.qdrantCollection, {
+    await client.upsert(collectionName, {
       wait: true,
       points: [
         {
@@ -356,7 +375,7 @@ export async function upsertReviewedContentToQdrant(input: {
 
     return { ok: true, pointId };
   } catch (error) {
-    console.warn("Failed to upsert reviewed content to Qdrant", error);
+    console.warn(`Failed to upsert reviewed content to Qdrant: ${error instanceof Error ? error.message : String(error)}`);
     return { ok: false, reason: "upsert_failed" };
   }
 }

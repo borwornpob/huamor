@@ -1,192 +1,130 @@
-# RAG Backend (Hono + TypeScript + LangGraph + Qdrant)
+# Medical Triage RAG Backend
 
-This backend is designed for a Next.js frontend and keeps shared API types in TypeScript.
+Production-oriented medical triage backend built with Hono, TypeScript, LangGraph, Qdrant, and Airflow-managed offline pipelines.
 
-## Features
+## What is in this repo
 
-- Login backend for role-based access (patient/doctor)
-- Chat backend with LangGraph orchestration
-- Doctor checkpoint page backend (expert reviews and approves AI draft)
-- Retrieval layer from self-hosted Qdrant (with local fallback in development)
-- SEA-LION provider integration for contextual medical triage draft generation
+- Online API for auth, patient chat, expert review, readiness, and metrics
+- Runtime metadata capture for every generated answer
+- Postgres-backed operational tables for inference events, review events, index versions, eval runs, and drift reports
+- Qdrant-backed retrieval with local document fallback in development
+- Docker-based deployment stack for API, Postgres, Qdrant, Nginx, and Airflow
+- Airflow DAGs for dataset refresh, candidate index build, offline evaluation, drift reporting, promotion, and rollback
 
-## API Surface
+## API surface
 
-- GET /api/docs
-- GET /api/docs/openapi.json
-- POST /api/auth/signup
-- POST /api/auth/login
-- GET /api/auth/me
-- POST /api/chat/start
-- POST /api/chat/:sessionId/message
-- GET /api/chat/sessions
-- GET /api/chat/sessions/:sessionId/history
-- GET /api/chat/:sessionId
-- GET /api/chat/:sessionId/history
-- GET /api/expert/pending
-- GET /api/expert/sessions
-- GET /api/expert/sessions/:sessionId/history
-- POST /api/expert/sessions/:sessionId/review
-- POST /api/expert/:sessionId/approve
+- `GET /health`
+- `GET /ready`
+- `GET /metrics`
+- `GET /api/docs`
+- `GET /api/docs/openapi.json`
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/chat/start`
+- `POST /api/chat/:sessionId/message`
+- `GET /api/chat/sessions`
+- `GET /api/chat/sessions/:sessionId/history`
+- `GET /api/chat/:sessionId`
+- `GET /api/chat/:sessionId/history`
+- `GET /api/expert/pending`
+- `GET /api/expert/sessions`
+- `GET /api/expert/sessions/:sessionId/history`
+- `POST /api/expert/sessions/:sessionId/review`
+- `POST /api/expert/:sessionId/approve`
 
-## Demo Accounts
+## Runtime behavior
 
-- Patient: patient1 or patient1@example.com / patient123
-- Doctor: doctor1 or doctor1@example.com / doctor123
+- Every patient response stores `provider`, `modelVersion`, `promptVersion`, `indexVersion`, retrieval source/count, fallback reason, and latency.
+- Every doctor review stores structured supervision fields including severity, escalation flag, outcome, and recommended department.
+- In `prod` or with `STRICT_STARTUP=true`, the API fails fast if DB, Qdrant, or hosted model credentials are missing.
+- In development, retrieval can fall back to local markdown/text files under `data/pdfs`.
 
-## Auth Requests
+## Local development
 
-Signup:
+1. Install Node dependencies:
 
-`POST /api/auth/signup`
-
-```json
-{
-   "email": "patient@example.com",
-   "firstName": "Jane",
-   "lastName": "Doe",
-   "birthDate": "1998-01-15",
-   "gender": "female",
-   "password": "secret123"
-}
-```
-
-Login:
-
-`POST /api/auth/login`
-
-```json
-{
-   "email": "patient@example.com",
-   "password": "secret123"
-}
-```
-
-## Local Setup
-
-1. Install dependencies:
-
+   ```bash
    pnpm install
+   ```
 
-2. Configure env:
+2. Copy and edit env:
 
+   ```bash
    cp .env.example .env
+   ```
 
-   For persistent chat history with Neon, set:
-- `DATABASE_URL=postgresql://...` (your Neon connection string)
+3. For local embedding mode, install Python dependencies you need:
 
-   If your Next App Router already handles login/signup, set:
-- `TRUST_FORWARDED_USER_HEADERS=true`
-- Forward these headers from Next server to this backend:
-  - `x-user-id` (required)
-  - `x-user-role` (`patient` or `doctor`, optional)
-  - `x-user-name` (optional)
+   ```bash
+   pip install sentence-transformers torch datasets pandas qdrant-client python-dotenv tqdm
+   ```
 
-   Required for Qdrant retrieval:
-- `QDRANT_URL`
-- `QDRANT_COLLECTION`
-- `EMBEDDING_PROVIDER` (`huggingface` or `sentence-transformers`)
-- `EMBEDDING_MODEL` (`BAAI/bge-m3`)
+4. Run the API:
 
-   Optional:
-- `QDRANT_API_KEY`
-- `QDRANT_TEXT_PAYLOAD_KEY` (default: `text`)
-- `QDRANT_VECTOR_NAME` (for named vectors)
-- `QDRANT_SCORE_THRESHOLD`
-- `HUGGINGFACE_API_KEY`
-- `HUGGINGFACE_BASE_URL`
-
-   SEA-LION LLM settings:
-- `LLM_PROVIDER=sealion`
-- `SEALION_API_KEY`
-- `SEALION_BASE_URL` (default: `https://api.sea-lion.ai/v1`)
-- `SEALION_MODEL` (default: `aisingapore/Gemma-SEA-LION-v4-27B-IT`)
-- `LLM_TEMPERATURE`
-
-   For local `sentence-transformers` mode:
-- `PYTHON_EXECUTABLE` (default: `python3`)
-- `SENTENCE_TRANSFORMERS_SCRIPT` (default: `./scripts/embed_query.py`)
-- `SENTENCE_TRANSFORMERS_TIMEOUT_MS`
-
-   Install local embedding dependencies:
-1. `pip install sentence-transformers torch`
-
-3. Run dev server:
-
+   ```bash
    pnpm dev
+   ```
 
-4. Health check:
+5. Verify startup:
 
-   GET http://localhost:8787/health
+   ```bash
+   curl http://localhost:8787/health
+   curl http://localhost:8787/ready
+   ```
 
-## Shared Types
+## Docker deployment
 
-Use the definitions in src/shared/types.ts in your Next.js app (copy directly or extract into a shared package/workspace).
+The first deployment target is a VM running Docker.
 
-## Doctor Checkpoint Flow
+1. Prepare `.env`.
+2. Start the stack:
 
-1. Patient sends message to /api/chat/start or /api/chat/:sessionId/message.
-2. LangGraph runs retrieval + draft generation.
-3. Assistant response is returned immediately and appended to the session.
-4. Doctor can inspect all chat sessions via /api/expert/sessions, fetch session history, and submit review data via /api/expert/sessions/:sessionId/review.
-5. Approved/corrected text is stored in session history and upserted to Qdrant.
+   ```bash
+   docker compose up -d --build
+   ```
 
-You can optionally choose provider per chat call by adding `provider: "sealion"` in `/api/chat/start` and `/api/chat/:sessionId/message` request body.
+3. Services:
 
-For showing recent chats per user (multi-session), call `/api/chat/sessions?limit=20` as authenticated patient.
+- API: `http://localhost:8787`
+- Nginx proxy: `http://localhost:8080`
+- Airflow UI: `http://localhost:8081`
+- Qdrant: `http://localhost:6333`
+- Postgres: `localhost:5432`
 
-## API Test Pipeline
+## Airflow pipelines
 
-Run an end-to-end smoke test for auth, patient chat flow, expert review, and vector upsert:
+Airflow DAGs live in `dags/` and call reusable Python code in `pipelines/`.
 
-1. Start server:
+- `dataset_refresh`: build a cleaned dataset artifact
+- `index_build`: create a candidate Qdrant collection and register it
+- `offline_eval`: record evaluation metrics for the latest candidate
+- `drift_report`: compute production drift indicators from inference/review events
+- `promote_candidate`: switch the latest candidate to active
+- `rollback_candidate`: mark the latest candidate as failed
 
-   `pnpm dev`
+This v1 treats “retrain” as dataset refresh + re-embedding + index rebuild + evaluation + promotion. It does not fine-tune model weights yet.
 
-   If Neon is unreachable in your network, disable DB for smoke test:
+## Smoke test
 
-   `DATABASE_URL= pnpm dev`
+Run an end-to-end flow for patient auth, chat, doctor review, readiness, and metrics:
 
-2. In a second terminal, run:
+```bash
+pnpm test:api
+```
 
-   `pnpm test:api`
+Optional environment overrides:
 
-Optional overrides:
-
-- `BASE_URL` (default: `http://localhost:8787`)
+- `BASE_URL`
 - `PATIENT_USERNAME`, `PATIENT_PASSWORD`
 - `DOCTOR_USERNAME`, `DOCTOR_PASSWORD`
-- `ASSERT_QDRANT_UPSERT` (`false` by default; set `true` to fail when Qdrant upsert is unavailable)
-- `CURL_CONNECT_TIMEOUT` (default: `10` seconds)
-- `CURL_MAX_TIME` (default: `90` seconds per request)
-
-Example:
-
-`BASE_URL=http://localhost:8787 pnpm test:api`
+- `ASSERT_QDRANT_UPSERT`
+- `CURL_CONNECT_TIMEOUT`
+- `CURL_MAX_TIME`
 
 ## Notes
 
-- Chat history is persisted in Neon when `DATABASE_URL` is set; otherwise in-memory fallback is used.
-- Retrieval first queries Qdrant; if Qdrant is not reachable, it falls back to local `.md/.txt` documents from `data/pdfs`.
-- Embedding provider can be remote Hugging Face inference or local sentence-transformers.
-- Replace with production DB and real auth provider before deployment.
-
-## Dataset Ingestion to Qdrant
-
-To run a pipeline equivalent to the notebook (load -> parse -> filter -> dedupe -> chunk -> embed -> upsert):
-
-1. Install Python dependencies:
-
-   `pip install datasets pandas sentence-transformers qdrant-client python-dotenv tqdm`
-
-2. Run ingestion script (full dataset):
-
-   `python3 scripts/ingest_thai_med_pack_to_qdrant.py`
-
-3. Optional test run with small subset first:
-
-   `python3 scripts/ingest_thai_med_pack_to_qdrant.py --max-rows 200 --max-chunks 2000`
-
-4. Verify Qdrant count:
-
-   `curl -sS https://qdrant.taspolsd.dev/collections/medical_kb`
+- Demo users are enabled only when `ALLOW_DEMO_USERS=true`.
+- Promotion is driven by rows in `index_versions`; the online API resolves the active collection from that table when DB is available.
+- The Airflow/Python environment requires additional packages from `deploy/airflow/requirements.txt`.
+- The repo currently contains both operational code and exploratory notebooks; only the code paths under `src/`, `pipelines/`, `dags/`, and `scripts/` are intended for deployment.

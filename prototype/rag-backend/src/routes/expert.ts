@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { incrementMetric } from "../lib/metrics.js";
+import { recordReviewEvent } from "../lib/ops.js";
 import { upsertReviewedContentToQdrant } from "../lib/retrieval.js";
 import { chatStore } from "../lib/store.js";
 import { authRequired, getAuth } from "../middleware/auth.js";
@@ -9,6 +11,10 @@ const approveSchema = z.object({
   answer: z.string().min(1),
   note: z.string().optional(),
   approvedContent: z.string().min(1).optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+  recommendedDepartment: z.string().min(1).optional(),
+  requiresEscalation: z.boolean().optional(),
+  reviewOutcome: z.enum(["approved", "corrected", "rejected"]).optional(),
 });
 
 const listSchema = z.object({
@@ -49,6 +55,10 @@ async function handleReviewRequest(c: any) {
     answer,
     content: answer,
     note: parsed.data.note,
+    severity: parsed.data.severity,
+    recommendedDepartment: parsed.data.recommendedDepartment,
+    requiresEscalation: parsed.data.requiresEscalation,
+    reviewOutcome: parsed.data.reviewOutcome,
   };
 
   session.status = "completed";
@@ -70,6 +80,20 @@ async function handleReviewRequest(c: any) {
   });
 
   const updated = await chatStore.update(session);
+  await recordReviewEvent({
+    sessionId: session.id,
+    patientId: session.patientId,
+    doctorId: auth.userId,
+    severity: parsed.data.severity,
+    recommendedDepartment: parsed.data.recommendedDepartment,
+    requiresEscalation: parsed.data.requiresEscalation,
+    reviewOutcome: parsed.data.reviewOutcome,
+    note: parsed.data.note,
+  });
+  incrementMetric("api_expert_reviews_total");
+  if (parsed.data.requiresEscalation) {
+    incrementMetric("api_expert_escalations_total");
+  }
 
   return c.json({ session: updated, qdrant: upsertResult });
 }

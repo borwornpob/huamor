@@ -46,6 +46,24 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface RetrievalResult {
+  text: string;
+  score?: number;
+  source: "qdrant" | "local";
+}
+
+export interface SessionRuntimeMetadata {
+  provider: string;
+  modelVersion: string;
+  promptVersion: string;
+  indexVersion: string;
+  retrievalSource: "qdrant" | "local" | "mixed" | "none";
+  retrievalCount: number;
+  fallbackReason?: string;
+  latencyMs: number;
+  generatedAt: string;
+}
+
 export interface ChatSession {
   id: string;
   patientId: string;
@@ -55,6 +73,7 @@ export interface ChatSession {
   messages: ChatMessage[];
   latestDraft?: string;
   retrievalContext?: string[];
+  lastRuntimeMetadata?: SessionRuntimeMetadata;
   doctorEdit?: {
     doctorId: string;
     approvedAt: string;
@@ -62,6 +81,10 @@ export interface ChatSession {
     answer: string;
     content: string;
     note?: string;
+    severity?: "low" | "medium" | "high" | "critical";
+    recommendedDepartment?: string;
+    requiresEscalation?: boolean;
+    reviewOutcome?: "approved" | "corrected" | "rejected";
   };
 }
 
@@ -83,6 +106,10 @@ export interface ExpertReviewRequest {
   answer: string;
   note?: string;
   approvedContent?: string;
+  severity?: "low" | "medium" | "high" | "critical";
+  recommendedDepartment?: string;
+  requiresEscalation?: boolean;
+  reviewOutcome?: "approved" | "corrected" | "rejected";
 }
 
 export interface ApiError {
