@@ -1,126 +1,51 @@
 "use client";
 
-import type { ReactNode } from "react";
-import type { ChatMessage, ChatSession, User } from "../types";
+import { useEffect } from "react";
+import type { User } from "../types";
+import { useDoctorReview } from "../hooks/useDoctorReview";
+import ChatMessageList from "./ChatMessageList";
 
 type DoctorViewProps = {
   user: User;
-  doctorSessions: ChatSession[];
-  doctorReviewedSessions: ChatSession[];
-  activeDoctorSessionId: string;
-  activeDoctorMessages: ChatMessage[];
-  doctorViewMode: "pending" | "reviewed";
-  setDoctorViewMode: (mode: "pending" | "reviewed") => void;
-  reviewQuestion: string;
-  setReviewQuestion: (value: string) => void;
-  reviewAnswer: string;
-  setReviewAnswer: (value: string) => void;
-  reviewNote: string;
-  setReviewNote: (value: string) => void;
-  isEditingAnswer: boolean;
-  onToggleEditAnswer: () => void;
-  loadingAction: string | null;
-  submittingReview: boolean;
-  error: string;
-  onRefresh: () => void;
+  token: string;
   onLogout: () => void;
-  onSelectSession: (id: string) => void;
-  onSubmitReview: () => void;
+  onError: (error: string) => void;
 };
 
-export default function DoctorView(props: DoctorViewProps) {
+export default function DoctorView({ user, token, onLogout, onError }: DoctorViewProps) {
   const {
-    user,
     doctorSessions,
     doctorReviewedSessions,
     activeDoctorSessionId,
     activeDoctorMessages,
     doctorViewMode,
-    setDoctorViewMode,
     reviewQuestion,
     reviewAnswer,
-    setReviewAnswer,
     reviewNote,
-    setReviewNote,
     isEditingAnswer,
-    onToggleEditAnswer,
     loadingAction,
     submittingReview,
     error,
-    onRefresh,
-    onLogout,
-    onSelectSession,
-    onSubmitReview,
-  } = props;
+    setDoctorViewMode,
+    setReviewAnswer,
+    setReviewNote,
+    setIsEditingAnswer,
+    loadPendingSessions,
+    selectSession,
+    submitReview,
+  } = useDoctorReview();
+
+  useEffect(() => {
+    if (error) onError(error);
+  }, [error, onError]);
+
+  useEffect(() => {
+    loadPendingSessions(token);
+  }, [token, loadPendingSessions]);
 
   const visibleDoctorSessions = doctorViewMode === "pending" ? doctorSessions : doctorReviewedSessions;
   const isLoadingList = loadingAction === "refresh-doctor";
   const isLoadingHistory = loadingAction === "select-doctor-session";
-
-  function renderFormattedContent(content: string) {
-    const lines = content.split("\n");
-    return (
-      <div className="space-y-1">
-        {lines.map((line, lineIndex) => {
-          if (!line.trim()) {
-            return <div className="h-1" key={`empty-${lineIndex}`} />;
-          }
-          const parts = line.split(/(\*\*[^*]+\*\*)/g);
-          return (
-            <p className="leading-relaxed" key={`line-${lineIndex}`}>
-              {parts.map((part, partIndex) => {
-                if (part.startsWith("**") && part.endsWith("**")) {
-                  return <strong key={`part-${lineIndex}-${partIndex}`}>{part.slice(2, -2)}</strong>;
-                }
-                return <span key={`part-${lineIndex}-${partIndex}`}>{part}</span>;
-              })}
-            </p>
-          );
-        })}
-      </div>
-    );
-  }
-
-  function renderDoctorHistoryBlocks() {
-    const blocks: ReactNode[] = [];
-    for (let index = 0; index < activeDoctorMessages.length; index += 1) {
-      const item = activeDoctorMessages[index];
-      const next = activeDoctorMessages[index + 1];
-      const isExpertPair = item.role === "doctor" && next?.role === "assistant";
-
-      if (isExpertPair) {
-        blocks.push(
-          <article className="rounded-2xl bg-[#dff5e9] p-3 shadow-sm text-[#195c4a]" key={`expert-pair-${item.id}-${next.id}`}>
-            <p className="text-xs font-semibold uppercase">Review by expert</p>
-            <p className="mt-2 text-xs font-semibold">Question</p>
-            {renderFormattedContent(item.content)}
-            <div className="my-2 h-px bg-[#195c4a]/20" />
-            <p className="text-xs font-semibold">Answer</p>
-            {renderFormattedContent(next.content)}
-          </article>,
-        );
-        index += 1;
-        continue;
-      }
-
-      blocks.push(
-        <article
-          className={`rounded-2xl p-3 shadow-sm ${
-            item.role === "user"
-              ? "bg-[#2a6a57] text-[#e4fff3]"
-              : item.role === "doctor"
-                ? "bg-[#dff5e9] text-[#195c4a]"
-                : "bg-[#dae4ee] text-[#2a333b]"
-          }`}
-          key={item.id}
-        >
-          <p className="text-xs font-semibold uppercase opacity-75">{item.role}</p>
-          <div className="mt-1">{renderFormattedContent(item.content)}</div>
-        </article>,
-      );
-    }
-    return blocks;
-  }
 
   return (
     <main className="min-h-screen bg-[#f6f9ff] text-[#2a333b]">
@@ -130,7 +55,12 @@ export default function DoctorView(props: DoctorViewProps) {
           <p className="text-xs text-[#576069]">ผู้เชี่ยวชาญ: {user.displayName}</p>
         </div>
         <div className="flex gap-2">
-          <button className="rounded-full bg-[#e1e9f2] px-4 py-2 text-sm" disabled={isLoadingList} onClick={onRefresh} type="button">
+          <button
+            className="rounded-full bg-[#e1e9f2] px-4 py-2 text-sm"
+            disabled={isLoadingList}
+            onClick={() => loadPendingSessions(token)}
+            type="button"
+          >
             {isLoadingList ? "Refreshing..." : "Refresh"}
           </button>
           <button className="rounded-full bg-[#e1e9f2] px-4 py-2 text-sm font-semibold" onClick={onLogout} type="button">
@@ -165,7 +95,7 @@ export default function DoctorView(props: DoctorViewProps) {
                   activeDoctorSessionId === s.id ? "bg-white text-[#0060ad]" : "bg-[#dae4ee] text-[#2a333b]"
                 }`}
                 key={s.id}
-                onClick={() => onSelectSession(s.id)}
+                onClick={() => selectSession(s.id, token)}
                 type="button"
               >
                 <p className="truncate font-semibold">{s.id}</p>
@@ -184,7 +114,7 @@ export default function DoctorView(props: DoctorViewProps) {
         <section className="rounded-3xl bg-[#eff4fb] p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#727c85]">การ์ดประวัติการสนทนา</h2>
           <div className="space-y-3">
-            {renderDoctorHistoryBlocks()}
+            <ChatMessageList messages={activeDoctorMessages} variant="flat-cards" />
             {activeDoctorMessages.length === 0 ? (
               <p className="rounded-2xl bg-white px-3 py-2 text-sm text-[#576069]">เลือกการสนทนาจากด้านซ้าย</p>
             ) : null}
@@ -199,7 +129,11 @@ export default function DoctorView(props: DoctorViewProps) {
               readOnly
               value={reviewQuestion}
             />
-            <button className="rounded-full bg-[#e1e9f2] px-4 py-2 text-xs font-semibold" onClick={onToggleEditAnswer} type="button">
+            <button
+              className="rounded-full bg-[#e1e9f2] px-4 py-2 text-xs font-semibold"
+              onClick={() => setIsEditingAnswer(!isEditingAnswer)}
+              type="button"
+            >
               {isEditingAnswer ? "Lock Edited Answer" : "Edit Answer"}
             </button>
             <textarea
@@ -218,7 +152,7 @@ export default function DoctorView(props: DoctorViewProps) {
             <button
               className="w-full rounded-full bg-gradient-to-br from-[#0060ad] to-[#68abff] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
               disabled={!activeDoctorSessionId || submittingReview || doctorViewMode === "reviewed"}
-              onClick={onSubmitReview}
+              onClick={() => submitReview(token)}
               type="button"
             >
               {submittingReview ? "Submitting..." : "Submit Review"}

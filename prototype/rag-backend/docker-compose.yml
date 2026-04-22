@@ -12,6 +12,12 @@ services:
         condition: service_started
     ports:
       - "8787:8787"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   postgres:
@@ -43,7 +49,7 @@ services:
     image: nginx:1.27-alpine
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8080:80"
     volumes:
@@ -79,6 +85,8 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/huamor
+      QDRANT_URL: http://qdrant:6333
     command: webserver
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
@@ -103,6 +111,8 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/huamor
+      QDRANT_URL: http://qdrant:6333
     command: scheduler
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:

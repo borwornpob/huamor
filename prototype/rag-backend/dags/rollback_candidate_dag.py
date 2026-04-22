@@ -16,5 +16,6 @@ with DAG(
 ) as dag:
     PythonOperator(
         task_id="fail_latest_candidate",
-        python_callable=lambda: fail_latest_candidate("manual rollback requested"),
+        python_callable=fail_latest_candidate,
+        op_args=["manual rollback requested"],
     )
