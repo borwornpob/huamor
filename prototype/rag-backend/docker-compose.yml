@@ -67,9 +67,13 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/huamor
+      PYTHONPATH: /opt/airflow
     user: "${AIRFLOW_UID:-50000}:0"
     entrypoint: /bin/bash
-    command: -lc "airflow db migrate && airflow users create --role Admin --username admin --password admin --firstname Airflow --lastname Admin --email admin@example.com || true"
+    command: -lc "airflow db migrate && python -m pipelines.db_migration && airflow users create --role Admin --username admin --password admin --firstname Airflow --lastname Admin --email admin@example.com || true"
+    volumes:
+      - ./pipelines:/opt/airflow/pipelines
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +91,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/huamor
       QDRANT_URL: http://qdrant:6333
+      PYTHONPATH: /opt/airflow
     command: webserver
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:
@@ -113,6 +118,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/huamor
       QDRANT_URL: http://qdrant:6333
+      PYTHONPATH: /opt/airflow
     command: scheduler
     user: "${AIRFLOW_UID:-50000}:0"
     depends_on:

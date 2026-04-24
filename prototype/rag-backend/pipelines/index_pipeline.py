@@ -2,17 +2,22 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from qdrant_client import QdrantClient
-from qdrant_client.http import models
-from sentence_transformers import SentenceTransformer
-
-from scripts.ingest_thai_med_pack_to_qdrant import build_corpus_rows, build_processed_df
-
 from pipelines.config import load_config
 from pipelines.ops_store import record_index_version
 
 
-def build_candidate_index(max_rows: int | None = 500, max_chunks: int | None = 2000) -> dict[str, str]:
+def build_candidate_index(
+    max_rows: int | None = 500, max_chunks: int | None = 2000
+) -> dict[str, str]:
+    # Heavy imports deferred to execution time to avoid OOM / timeout during Airflow DAG parsing
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models
+    from scripts.ingest_thai_med_pack_to_qdrant import (
+        build_corpus_rows,
+        build_processed_df,
+    )
+    from sentence_transformers import SentenceTransformer
+
     cfg = load_config()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     index_version = f"{cfg.base_collection}_{timestamp}"

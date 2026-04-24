@@ -3,9 +3,9 @@
 # Spins up the backend Docker stack, runs backend E2E tests, then frontend E2E tests.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="${SCRIPT_DIR}/prototype/rag-backend"
-FRONTEND_DIR="${SCRIPT_DIR}/prototype/rag-frontend"
+WORKSPACE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BACKEND_DIR="${WORKSPACE_ROOT}/prototype/rag-backend"
+FRONTEND_DIR="${WORKSPACE_ROOT}/prototype/rag-frontend"
 BASE_URL="${BASE_URL:-http://localhost:8787}"
 
 RED='\033[0;31m'
